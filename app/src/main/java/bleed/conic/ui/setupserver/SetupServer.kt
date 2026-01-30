@@ -13,7 +13,8 @@ import android.widget.TextView
 import androidx.annotation.RequiresApi
 import bleed.conic.Client
 import bleed.conic.R
-import bleed.conic.any_null
+import bleed.conic.Connect
+import bleed.conic.goto_activity
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 class SetupServer : Fragment() {
@@ -62,13 +63,15 @@ class SetupServer : Fragment() {
         submit?.setOnClickListener {
             /* make a client */
             val cli = Client(
-                activity as Activity,
+                requireContext(),
                 addr!!.text.toString(),
                 user!!.text.toString(),
                 pass!!.text.toString()
             )
 
             cli.write()
+
+            goto_activity(requireContext(), Connect::class.java)
         }
     }
 }

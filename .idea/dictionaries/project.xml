@@ -2,6 +2,8 @@
   <dictionary name="project">
     <words>
       <w>addr</w>
+      <w>chnk</w>
+      <w>mkhttpgetheader</w>
       <w>tcli</w>
     </words>
   </dictionary>

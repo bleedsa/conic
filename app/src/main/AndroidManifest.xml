@@ -14,6 +14,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Conic">
         <activity
+            android:name=".Home"
+            android:exported="false" />
+        <activity
             android:name=".Connect"
             android:exported="false"
             android:label="@string/title_activity_connect"

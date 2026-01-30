@@ -1,6 +1,7 @@
 package bleed.conic
 
 import android.app.Activity
+import android.content.Context
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
@@ -12,30 +13,33 @@ fun client_file_exists(a: Activity): Boolean = FsFile(a, client_file_path).exist
 
 /* a subsonic client */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-class Client(val a: Activity, var addr: String, var user: String, var pass: String) {
-    val file = FsFile(a, client_file_path)
+class Client(val ctx: Context, var addr: String, var user: String, var pass: String) {
+    val tag = "Client"
+    val file = FsFile(ctx, client_file_path)
 
     init {
         Log.i(tag, "opening client using config file $file")
     }
 
-    constructor(a: Activity) : this(a, "", "", "") {
-        val f = FsFile(a, "Client.json")
+    constructor(ctx: Context) : this(ctx, "", "", "") {
+        val f = FsFile(ctx, "Client.json")
         val s = f.read_str()
+        Log.i(tag, "f.read_str(): $s")
         val j = JSONObject(s)
-        addr = j["addr"] as String
-        user = j["user"] as String
-        pass = j["pass"] as String
+        val F = {k: String -> j[k] as String}
+        addr = F("addr");user = F("user");pass = F("pass")
     }
 
-    val net = NetApi(addr)
+    /* connect to the addr over http */
+    val http = Http(addr)
 
-    fun toJSON(): JSONObject {
-        return JSONObject(mapOf("addr" to addr, "user" to user, "pass" to pass))
-    }
+    /* various util methods */
+    fun toJSON(): JSONObject = JSONObject(mapOf("addr" to addr, "user" to user, "pass" to pass))
+    fun write() = file.write_str(toJSON().toString())
+    override fun toString(): String = "$user@$addr"
 
-    fun write() {
-        val obj = toJSON()
-        file.write_str(obj.toString())
+    fun ping(): Boolean {
+        val res = http.get("/rest/ping.view", "");
+        return false
     }
 }

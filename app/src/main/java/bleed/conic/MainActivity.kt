@@ -23,8 +23,7 @@ class MainActivity : AppCompatActivity() {
         // Example of a call to a native method
         binding.sampleText.text = stringFromJNI()
 
-        val intent = Intent(this, Setup::class.java)
-        startActivity(intent)
+        goto_activity(this, Setup::class.java)
     }
 
     /**
