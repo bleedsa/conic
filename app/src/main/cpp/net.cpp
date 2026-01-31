@@ -1,4 +1,6 @@
 #include <sstream>
+#include <vector>
+#include <cassert>
 #include <iostream>
 #include <cstdio>
 #include <netdb.h>
@@ -6,7 +8,6 @@
 #include <unistd.h>
 
 #include "u.h"
-#include "J.h"
 #include "R.h"
 #include "net.h"
 
@@ -15,20 +16,22 @@ auto Net::parse_addr_port(const char *x) -> R<std::tuple<std::string, std::strin
     char *ptr;
     S col /* colon idx */, i, L;
 
+    log_info(TAG, "parse_addr_port(%s)", x);
+
     ptr = strchr((char*)x, ':');
     if (ptr == nullptr)
+        [[unlikely]]
         return R<std::tuple<std::string, std::string>>("malformed address: no ':'");
-    col = (S)(ptr - x);
     L = strlen(x);
 
-    for (i = 0; i < col; i++) addr << x[i];
-    for (i = col+1; i < L; i++) port << x[i];
+    for (i = 0; x+i < ptr; i++) addr << x[i];
+    for (i += 1; x[i] != 0; i++) port << x[i];
 
     auto tup = std::tuple<std::string, std::string>{addr.str(), port.str()};
     return R<std::tuple<std::string, std::string>>(tup);
 }
 
-auto Net::mksock(const char *addr_port) -> int {
+auto Net::mksock(const char *addr_port) -> R<int> {
     int ret, sock;
     const char *addr, *port;
     struct addrinfo hints{}, *res, *p;
@@ -36,11 +39,13 @@ auto Net::mksock(const char *addr_port) -> int {
 
     /* split up the addr port string */
     auto r = parse_addr_port((char*)addr_port);
-    if (!r) fatal("failed to parse address: %s", r.err.c_str());
+    if (!r) return R<int>(r.err.c_str());
     auto [addr_str, port_str] = *r;
 
     addr = addr_str.c_str();
     port = port_str.c_str();
+
+    log_info(TAG, "mksock(): connecting to %s:%s", addr, port);
 
     /* get address info */
     memset(&hints, 0, Z(hints));
@@ -48,12 +53,12 @@ auto Net::mksock(const char *addr_port) -> int {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 6; /* IPROTO_TCP */
     if ((ret = getaddrinfo(addr, port, &hints, &res)) != 0) {
-        fatal("getaddrinfo(): %s", gai_strerror(ret));
+        return R<int>(str_fmt("getaddrinfo(): " << gai_strerror(ret)));
     }
 
     /* make socket */
     sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (sock == -1) fatal("socket(): %s", strerror(errno));
+    if (sock == -1) R<int>(str_fmt("socket(): " << strerror(errno)));
 
     /* make connection */
     for (p = res, connected = false; p != nullptr; p = p->ai_next) {
@@ -62,17 +67,26 @@ auto Net::mksock(const char *addr_port) -> int {
             connected = true;
             break;
         } else {
-            std::cout << "failed to connect...retrying..." << std::endl;
+            log_err(TAG, "mksock(): failed to connect...retrying...");
         }
     }
 
     freeaddrinfo(res);
 
-    return sock;
+    return R<int>(sock);
 }
 
-Net::Http::Http(const char *addr) : sock{mkhttpsock(addr)}, addr{Str::A(addr)} {}
-Net::Http::Http(const std::string &addr) : sock{mkhttpsock(addr)}, addr{Str::A(addr)} {}
+Net::Http::Http(const char *addr) : addr{Str::A(addr)} {
+    auto r = mkhttpsock(this->addr.c_str());
+    if (!r) throw r.err.str();
+    sock = *r;
+}
+
+Net::Http::Http(const std::string &addr) : addr{Str::A(addr)} {
+    auto r = mkhttpsock(addr);
+    if (!r) throw r.err.str();
+    sock = *r;
+}
 Net::Http::~Http() {close(sock);}
 
 inl auto mkhttpgetheader(
@@ -96,61 +110,104 @@ inl auto mkhttpgetheader(
     return Str::A(ptr);
 }
 
-template<typename E>
-inl auto err(int sock, const char *msg) -> R<E> {
-    close(sock);
-    return R<E>(msg);
-}
-
-template<typename E>
-inl auto err_errno(int sock) -> R<E> {
-    return err<E>(sock, strerror(errno));
-}
-
 auto Net::Http::send(Str::A *str) const -> R<int> {
+    constexpr const char *TAG = "Net::Http::send";
     int sent, total = 0;
     auto ptr = str->ptr;
     auto len = str->len;
 
-    std::cout << "sending " << len << "bytes...";
+    log_info(TAG, "sending %zu bytes...", len);
     fflush(stdout);
     while (total < len) {
         if ((sent = ::send(sock, ptr, len-total, 0)) < 0)
-            return err_errno<int>(sock);
+            return err_errno<int>();
         total += sent;
     }
-    std::cout << "ok " << total << std::endl;
+    log_info(TAG, "sent %d bytes.", total);
 
     return R<int>(total);
 }
 
 auto Net::Http::recv() -> R<Str::A> {
-    int got, total;
-    constexpr auto z = 2048;
+    constexpr const char *TAG = "Net::Http::recv()";
+    constexpr S z = 2048;
+    int got, total = 0;
     char chnk[z];
     std::stringstream ss;
 
     do {
         /* clear the chunk */
         memset(chnk, 0, z);
-        if ((got = ::recv(sock, chnk, z-1, 0)) < 0)
+        log_info(TAG, "recv'ing %zu bytes...", z);
+
+        /* perform the recv and add it to the buffer */
+        if ((got = ::recv(sock, chnk, z-1, 0)) < 0) {
+            err_errno<Str::A>();
+        } else if (got < z) {
+            /* incomplete chunk. add it to the buffer and exit */
+            chnk[got-1] = 0;
+            total += got;
+            ss << chnk;
+            log_info(TAG, "recv'd <%zu bytes; finishing. (%d total)", z, total);
             break;
-        else {
+        } else {
+            /* add this chunk to the buffer and wait for the next one */
+            log_info(TAG, "recv'd %d bytes.", got)
             chnk[z-1] = 0;
             total += got;
             ss << chnk;
         }
     } while (1);
 
-    return R<Str::A>(Str::A(ss.str()));
+    auto str = Str::A(ss.str());
+    log_info(TAG, "returning body\n%s", str.ptr);
+
+    return R<Str::A>(str);
+}
+
+inl auto parser_next_is_header(Str::Parser &prs) -> bool {
+    auto next_nl = strstr(prs.ptr, "\r\n");
+    auto next_colon = strstr(prs.ptr, ":");
+    if (!next_nl || !next_colon || next_nl == prs.ptr || next_colon == prs.ptr) return false;
+    return next_nl > next_colon;
 }
 
 auto Net::Http::parse_HttpResult(const Str::A &str) -> R<HttpResult> {
-    /* TODO */
+    constexpr const char *TAG = "Net::Http::parse_HttpResult";
+    auto src = str.ptr;
+    auto len = str.len;
+
+    /* find information on the status line ie
+     * HTTP/1.0 200 OK\r\n */
+    auto status_ptr = strstr(src, " ")+1;
+    if (!status_ptr || !*status_ptr)
+        return err<HttpResult>(str_fmt("could not find \\r\\n in response"<<src));
+
+    /* make a parser and get the status */
+    auto prs = Str::Parser(status_ptr);
+    S status;
+    prs >> status;
+    prs.skip_ln();
+
+    /* parse the headers */
+    std::vector<std::tuple<Str::A, Str::A>> headers;
+    while (parser_next_is_header(prs)) {
+        auto ln = prs.ln();
+        /* split by the colon to get the header key and value */
+        auto tup = ln.split_first(':');
+        headers.push_back(tup);
+    }
+
+    log_info(TAG, "parsed status %zu", status);
+    for (const auto &[k, v] : headers) log_info(TAG, "parsed header %s:%s", k.ptr, v.ptr);
+
+    assert(false);
 }
 
+/* perform a GET requesst */
 auto Net::Http::get(const char *path, const char *query) -> R<HttpResult> {
-    auto a = this->addr.c_str();
+    auto a = addr.c_str();
+    log_info(TAG, "get(): %s", a);
     auto head = mkhttpgetheader(a, path, query);
 
     /* send the header */
@@ -167,5 +224,3 @@ auto Net::Http::get(const char *path, const char *query) -> R<HttpResult> {
 
     return res;
 }
-
-

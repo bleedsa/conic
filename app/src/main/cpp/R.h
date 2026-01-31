@@ -13,7 +13,7 @@ struct R {
 
     inline explicit R(X x)            : I{true}, x{x} {}
     inline explicit R(const char *x)  : I{false}, err{Str::A(x)} {}
-    inline explicit R(std::string &x) : I{false}, err{Str::A(x)} {}
+    inline explicit R(std::string x) : I{false}, err{Str::A(x)} {}
 
     inline ~R() {
         if (I) x.~X();

@@ -1,6 +1,8 @@
 #ifndef CONIC_J_H
 #define CONIC_J_H
 
+/* java interface code */
+
 #include <jni.h>
 #include <string>
 

@@ -13,12 +13,14 @@ fun client_file_exists(a: Activity): Boolean = FsFile(a, client_file_path).exist
 
 /* a subsonic client */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-class Client(val ctx: Context, var addr: String, var user: String, var pass: String) {
+class Client(ctx: Context, var addr: String, var user: String, var pass: String) {
     val tag = "Client"
     val file = FsFile(ctx, client_file_path)
+    lateinit var http: Http
 
     init {
         Log.i(tag, "opening client using config file $file")
+        http = Http(addr)
     }
 
     constructor(ctx: Context) : this(ctx, "", "", "") {
@@ -27,11 +29,8 @@ class Client(val ctx: Context, var addr: String, var user: String, var pass: Str
         Log.i(tag, "f.read_str(): $s")
         val j = JSONObject(s)
         val F = {k: String -> j[k] as String}
-        addr = F("addr");user = F("user");pass = F("pass")
+        addr = F("addr");user = F("user");pass = F("pass");http = Http(addr)
     }
-
-    /* connect to the addr over http */
-    val http = Http(addr)
 
     /* various util methods */
     fun toJSON(): JSONObject = JSONObject(mapOf("addr" to addr, "user" to user, "pass" to pass))
@@ -40,6 +39,6 @@ class Client(val ctx: Context, var addr: String, var user: String, var pass: Str
 
     fun ping(): Boolean {
         val res = http.get("/rest/ping.view", "");
-        return false
+        return res.status == 200
     }
 }
