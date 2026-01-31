@@ -97,8 +97,10 @@ inl auto mkhttpgetheader(
     std::stringstream ss;
 
     ss << "GET " << path << " Http/1.1\r\n";
-    ss << "Host " << addr << '?' << query << "\r\n";
+    ss << "Host " << addr;
+    if (!Str::is_empty(query)) ss << '?' << query << "\r\n";
     ss << "User-Agent: Conic/" << U::VERSION << "\r\n";
+    ss << "Accept: */*";
     ss << "\r\n";
 
     auto str = ss.str();
@@ -191,12 +193,7 @@ auto Net::Http::parse_HttpResult(const Str::A &str) -> R<HttpResult> {
 
     /* parse the headers */
     std::vector<std::tuple<Str::A, Str::A>> headers;
-    while (parser_next_is_header(prs)) {
-        auto ln = prs.ln();
-        /* split by the colon to get the header key and value */
-        auto tup = ln.split_first(':');
-        headers.push_back(tup);
-    }
+    while (parser_next_is_header(prs)) headers.push_back(prs.ln().split_first(':'));
 
     log_info(TAG, "parsed status %zu", status);
     for (const auto &[k, v] : headers) log_info(TAG, "parsed header %s:%s", k.ptr, v.ptr);

@@ -36,3 +36,9 @@ Java_bleed_conic_Http_get_1(
         log_err(TAG, "%s", e.c_str());
     }
 }
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_bleed_conic_UKt_VERSION(JNIEnv *env, jclass clazz) {
+    return env->NewStringUTF(U::VERSION);
+}

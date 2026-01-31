@@ -28,11 +28,12 @@ auto Str::A::split_first(char c) -> std::tuple<A, A> {
     auto idx = fnd((char[]){c, 0});
 
     /* make the buffers */
-    auto x = new char[idx+1];
-    auto y = new char[len-idx-1];
-    memmove(x, ptr, idx);             x[idx]=0;
-    memmove(y, ptr+idx+2, len-idx-1); y[len-idx-2]=0;
+    auto x = new char[idx+1], y = new char[len-idx-1];
+    /* move */
+    memmove(x, ptr, idx);             /* null */ x[idx]=0;
+    memmove(y, ptr+idx+2, len-idx-1); /* null */ y[len-idx-2]=0;
 
+    /* wrap */
     return {Str::A(x), Str::A(y)};
 }
 

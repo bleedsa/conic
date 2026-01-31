@@ -9,6 +9,11 @@
 #include "u.h"
 
 namespace Str {
+    /* is this string empty? */
+    inl auto is_empty(const char *x) -> bool {
+        return x[0] == 0;
+    }
+
     /* A is a static-width vector of char with a len and a ptr */
     struct A {
         S len;
@@ -67,6 +72,7 @@ namespace Str {
         char *ptr;
         static constexpr const char *TAG = "Str::Parser";
 
+        /* sizof the buffer in ptr */
         inl auto Zof() -> S {
             return Z(char)*(len+1);
         }
@@ -105,13 +111,16 @@ namespace Str {
 
         /* parse out a line */
         inl auto ln() -> Str::A {
+            /* find the endl */
             auto endl = strstr(ptr, "\n");
             auto len = endl - ptr;
+
+            /* move the line into a buffer */
             auto buf = new char[len+1];
             memmove(buf, ptr, Z(char)*len);
             buf[len]=0;
-            log_info(TAG, "ln(): buf: %s", buf);
 
+            /* cleanup and return */
             auto r = Str::A(buf);
             delete[] buf;
             ptr += len+1;
@@ -120,7 +129,7 @@ namespace Str {
     };
 }
 
-/* parse an integer */
+/* parse an S using stl */
 inl auto operator>>(Str::Parser x, S &r) -> Str::Parser {
     std::istringstream(x.ptr) >> r;
     x.ptr += std::to_string(r).length();
