@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <string>
 #include <iostream>
+#include <cassert>
 
 #include "u.h"
 #include "net.h"
@@ -27,11 +28,15 @@ Java_bleed_conic_Http_get_1(
         auto http = Net::Http(addr);
 
         auto r = http.get(path, query);
-        if (!r) {
-            log_err(TAG, "%s", r.err.c_str());
+        if (!r) log_err(TAG, "%s", r.err.c_str());
+        auto h = *r;
 
-        }
+        auto hc = h.c_str();
+        log_info(TAG, "got result %s", hc);
+        delete[] hc;
+
         free_jcstr(addr_, addr);free_jcstr(path_, path);free_jcstr(query_, query);
+        assert(false);
     } catch (std::string &e) {
         log_err(TAG, "%s", e.c_str());
     }

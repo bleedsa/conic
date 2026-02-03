@@ -1,6 +1,6 @@
 #include "str.h"
 
-Str::A::A(const char *x) : len{strlen(x)}, ptr{new char[Zof()]} {
+Str::A::A(const char *x) : len{strlen(x)}, ptr{x ? new char[Zof()] : nullptr} {
     cpy(x);
 }
 
@@ -13,17 +13,21 @@ Str::A::~A() {
     delete[] ptr;
 }
 
-Str::A::A(const A &x) : len{x.len}, ptr{new char[Zof()]} {
+Str::A::A(const A &x) : len{x.len}, ptr{x.ptr ? new char[Zof()] : nullptr} {
     cpy(x.ptr);
 }
 
 auto Str::A::operator=(const A &x) -> A& {
-    len = x.len, ptr = new char[Zof()];
+    len = x.len, ptr = x.ptr ? new char[Zof()] : nullptr;
     cpy(x.ptr);
     return *this;
 }
 
 auto Str::A::split_first(char c) -> std::tuple<A, A> {
+    /* safety */
+    [[unlikely]]
+    if (!ptr) throw str_fmt("split_first("<<c<<") on nullptr");
+
     /* find the char in the string */
     auto idx = fnd((char[]){c, 0});
 
@@ -34,6 +38,8 @@ auto Str::A::split_first(char c) -> std::tuple<A, A> {
     memmove(y, ptr+idx+2, len-idx-1); /* null */ y[len-idx-2]=0;
 
     /* wrap */
-    return {Str::A(x), Str::A(y)};
+    std::tuple<Str::A, Str::A> ret = {Str::A(x), Str::A(y)};
+    delete[] x;delete[] y;
+    return ret;
 }
 

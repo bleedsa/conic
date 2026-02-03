@@ -14,9 +14,17 @@
 #endif
 
 /* always inline functions */
+#ifndef DBG
 #define inl [[clang::always_inline]] inline
+#else
+#define inl inline
+#endif
+
 /* sizeof alias */
 #define Z(x) (sizeof(x))
+
+/* debug print and return */
+#define _(f, x...) ({log_info(TAG, f, ({x;}));x;})
 
 /* format a string using stringstream << oprs */
 #define str_fmt(f...) ({ \
@@ -24,6 +32,8 @@
     ss << f;           \
     ss.str(); \
 })
+
+#define eprintf(f...) (fprintf(stderr, f))
 
 #ifdef ANDROID
 /* log an error to android with a tag and a printf formatted string */
@@ -38,8 +48,8 @@
     __android_log_print(ANDROID_LOG_INFO, _tag.c_str(), f); \
 }
 #else
-#define log_err(tag, f...) {fprintf(stderr, f);putc('\n', stderr);}
-#define log_info(tag, f...){printf(f);putc('\n', stdout);}
+#define log_err(tag, f...) {eprintf("[%s]: ", tag);eprintf(f);std::cerr<<std::endl;}
+#define log_info(tag, f...){printf("[%s]: ", tag);printf(f);std::cout<<std::endl;}
 #endif
 
 /* fatal error */

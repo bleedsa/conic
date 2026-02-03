@@ -1,4 +1,5 @@
-CXXFLAGS := -fsanitize=address -g -I/usr/lib/jvm/java-21-openjdk-amd64/include/
+CXXFLAGS := -fsanitize=address -g -I/usr/lib/jvm/java-21-openjdk-amd64/include \
+	    -DDBG
 
 FS := net str u 0
 OBJS := $(patsubst %,%.cpp.o,$(FS))
@@ -15,6 +16,9 @@ $(OBJS): $(CPPS)
 
 run: all
 	./0.exe
+
+gdb: all
+	gdb ./0.exe
 
 clean:
 	rm -f *.o *.exe

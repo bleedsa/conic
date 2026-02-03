@@ -5,13 +5,14 @@
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <functional>
 
 #include "u.h"
 
 namespace Str {
     /* is this string empty? */
     inl auto is_empty(const char *x) -> bool {
-        return x[0] == 0;
+        return x != nullptr && x[0] == 0;
     }
 
     /* A is a static-width vector of char with a len and a ptr */
@@ -19,6 +20,8 @@ namespace Str {
         S len;
         char *ptr;
         static constexpr const char *TAG = "Str::A";
+
+        inl A() : len{0}, ptr{nullptr} {}
 
         explicit A(const char *x);
         explicit A(const std::string &x);
@@ -35,26 +38,37 @@ namespace Str {
 
         /* copy a string into the ptr */
         inl auto cpy(const char *x) -> void {
-            memmove(ptr, x, Zof());
+            if (ptr) [[likely]] memmove(ptr, x, Zof());
         }
 
         /* convert to a c string */
         [[nodiscard]]
         inl auto c_str() const -> const char* {
-            auto str = new char[Zof()];
-            memmove(str, ptr, Zof());
-            return str;
+            if (!ptr) [[unlikely]] {
+                auto e = new char[1];
+                e[0]=0;
+                return e;
+            } else [[likely]] {
+                auto str = new char[Zof()];
+                memmove(str, ptr, Zof());
+                return str;
+            }
         }
 
         /* convert to a c++ string */
         inl auto str() -> std::string {
-            std::stringstream ss;
-            ss << ptr;
-            return ss.str();
+            if (ptr) [[likely]] {
+                std::stringstream ss;
+                ss << ptr;
+                return ss.str();
+            } else [[unlikely]] {
+                return std::string();
+            }
         }
 
         /* find the index of a string in the str */
-        inl auto fnd(const char *str) -> long long {
+        inl auto fnd(const char *str) -> signed long long {
+            if (!ptr) [[unlikely]] return -1;
             /* find */
 		    auto f = strstr(ptr, str);
             /* safety */
@@ -77,18 +91,16 @@ namespace Str {
             return Z(char)*(len+1);
         }
 
-        inl Parser(const char *str) : len{strlen(str)}, ptr{new char[Zof()]} {
-            memmove(ptr, str, Zof());
-        }
-        inl Parser(const std::string &str) : len{str.size()}, ptr{new char[Zof()]} {
-            memmove(ptr, str.c_str(), Zof());
-        }
-        inl ~Parser(){delete[] ptr;}
+        inl Parser(const char *str) : len{strlen(str)}, ptr{(char*)str} {}
+        inl Parser(const std::string &str)
+	    : len{str.size()}
+	    , ptr{(char*)str.c_str()}
+	{}
+        inl ~Parser(){}
 
         /* copy a parser into this parser */
         inl auto cpy(const Parser &x) -> void {
-            len = x.len, ptr = new char[Zof()];
-            memmove(ptr, x.ptr, Zof());
+            len = x.len, ptr = x.ptr;
         }
         inl Parser(const Parser &x) {cpy(x);}
         inl auto operator=(const Parser &x) -> Parser& {cpy(x);return *this;}
@@ -134,6 +146,23 @@ inl auto operator>>(Str::Parser x, S &r) -> Str::Parser {
     std::istringstream(x.ptr) >> r;
     x.ptr += std::to_string(r).length();
     return x;
+}
+
+/* parse an int using stl */
+inl auto operator>>(Str::Parser x, int &r) -> Str::Parser {
+    std::istringstream(x.ptr) >> r;
+    x.ptr += std::to_string(r).length();
+    return x;
+}
+
+namespace std {
+    template<>
+    class less<Str::A> {
+    public:
+        inl auto operator()(const Str::A &x, const Str::A &y) const -> bool {
+            return strcmp(x.ptr, y.ptr) < 0;
+        }
+    };
 }
 
 #endif

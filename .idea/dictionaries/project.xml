@@ -3,9 +3,11 @@
     <words>
       <w>addr</w>
       <w>chnk</w>
+      <w>cstr</w>
       <w>endl</w>
       <w>getaddrinfo</w>
       <w>iproto</w>
+      <w>jcstr</w>
       <w>mkhttpgetheader</w>
       <w>mksock</w>
       <w>recv'd</w>
